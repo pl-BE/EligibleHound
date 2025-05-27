@@ -1,0 +1,3 @@
+﻿Assignment State;User Group Name;Role Name;Email;PrincipalName;Member Type;Assignment Start Time (UTC);Assignment End Time (UTC)
+Eligible;ADM Test;Global Administrator;test@test.com;cbailey@phantomcorp.onmicrosoft.com;Direct;2020-08-21 08:50:40Z;Permanent
+Active;ADM Test;Global Administrator;test2@test.com;cbailey@phantomcorp.onmicrosoft.com;Direct;2020-08-21 08:50:40Z;Permanent
