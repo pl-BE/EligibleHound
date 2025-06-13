@@ -1,96 +1,106 @@
-# CSV and JSON files
+# Konfiguration
 $csvPath = "export_example.csv"
 $jsonPath = "azurehound_example.json"
-$outputPath = "eligiblehound.json"
+$neo4jUrl = "http://localhost:7474/db/neo4j/tx/commit"
+$neo4jUser = "neo4j"
+$neo4jPassword = "bloodhoundcommunityedition"
 
-# Read JSON
-Write-Host "Starting to read JSON $jsonPath"
+# JSON lesen
+Write-Host "Lese JSON $jsonPath"
 $json = Get-Content $jsonPath -Raw | ConvertFrom-Json
-Write-Host "Reading JSON completed"
 
-# Prepare role and user assignments
+# Rollen- und Benutzerzuordnung vorbereiten
 $roleMap = @{}
 $userMap = @{}
+$tenantMap = @{}
 
 foreach ($entry in $json.data) {
     switch ($entry.kind) {
         "AZRole" {
-            $roleMap[$entry.data.displayName] = $entry.data.id
+            $roleMap[$entry.data.displayName] = $entry.data
         }
         "AZUser" {
-            $userMap[$entry.data.userPrincipalName] = $entry.data.id
+            $userMap[$entry.data.userPrincipalName] = $entry.data
+        }
+        "AZTenant" {
+            $tenantMap[$entry.data.tenantId] = $entry.data
         }
     }
 }
 
-# Read and filter CSV
-Write-Host "Starting to read CSV $csvPath"
+# CSV lesen und filtern
+Write-Host "Lese CSV $csvPath"
 $csv = Import-Csv -Path $csvPath -Delimiter ";" | Where-Object { $_."Assignment State" -eq "Eligible" }
-Write-Host "Reading CSV completed"
 
-# Create JSON containing eligible role assignments
-$updateJson = @{
-    data = @()
-    meta = $json.meta
-}
-
+# Für jede Eligible-Zeile eine Beziehung in Neo4j anlegen
 foreach ($entry in $csv) {
     $roleName = $entry."Role Name"
     $principalName = $entry.PrincipalName
 
-    # Resolve role
-    $roleId = $roleMap[$roleName]
-    if (-not $roleId) {
-        Write-Warning "Rolle '$roleName' nicht gefunden."
+    $role = $roleMap[$roleName]
+    $user = $userMap[$principalName]
+    $tenant = $tenantMap.Values | Select-Object -First 1
+
+    if (-not $role) {
+        Write-Warning "Role '$roleName' not found."
         continue
     }
 
-    # Resolve user
-    $principalId = $userMap[$principalName]
-    if (-not $principalId) {
-        Write-Warning "Benutzer '$principalName' nicht gefunden."
+    if (-not $user) {
+        Write-Warning "User '$principalName' not found."
         continue
     }
 
-    # Find role assignment entry in JSON file
-    $roleAssignmentEntry = $json.data | Where-Object { $_.kind -eq "AZRoleAssignment" -and $_.data.roleDefinitionId -eq $roleId }
-    if (-not $roleAssignmentEntry) {
-        Write-Warning "Kein AZRoleAssignment-Eintrag für Rolle '$roleName' gefunden."
+    if (-not $tenant) {
+        Write-Warning "No tenant found."
         continue
     }
 
-    # Create new role assignment
-    $newAssignment = @{
-        id                = "Added by EligibleHound: $roleName : $principalName"
-        roleDefinitionId  = $roleId
-        principalId       = $principalId
-        directoryScopeId  = "/"
-        roleDefinition    = @{
-            id              = ""
-            description     = ""
-            displayName     = ""
-            isBuiltIn       = $false
-            isEnabled       = $false
-            rolePermisions  = $null
-            version         = ""
+    if ($role.displayName -eq "Global Administrator"){
+        $cypherAZGlobalAdminEligible = @"
+MATCH (u:AZBase {objectid: '$($user.id.ToUpper())'}), (r:AZTenant {objectid: '$($tenant.tenantId.ToUpper())'})
+MERGE (u)-[:AZGlobalAdminEligible]->(r)
+"@
+        
+        $body = @{
+            statements = @(@{
+                statement = $cypherAZGlobalAdminEligible
+            })
+        } | ConvertTo-Json -Depth 5
+
+        $headers = @{
+            Authorization = "Basic " + [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("${neo4jUser}:${neo4jPassword}"))
+            "Content-Type" = "application/json"
         }
-        DirectoryScope    = $null
-        appScope          = @{
-            id            = ""
-            display_name  = ""
-            type          = ""
+
+        try {
+            $response = Invoke-RestMethod -Uri $neo4jUrl -Method Post -Headers $headers -Body $body
+            Write-Host "Beziehung AZGolbalAdminEligible erstellt: $principalName -> $roleName"
+        } catch {
+            Write-Warning "Fehler beim Erstellen der Beziehung: $_"
         }
     }
+    
+    $cypherAZRoleEligible = @"
+MATCH (u:AZBase {objectid: '$($user.id.ToUpper())'}), (r:AZRole {objectid: '$($role.id.ToUpper())@$($tenant.tenantId.ToUpper())'})
+MERGE (u)-[:AZRoleEligible]->(r)
+"@
 
-    # Add new assignment to existing assignments
-    $roleAssignmentEntry.data.roleAssignments += $newAssignment
-    $updateJson.data += $roleAssignmentEntry
+    $body = @{
+        statements = @(@{
+            statement = $cypherAZRoleEligible
+        })
+    } | ConvertTo-Json -Depth 5
 
-    Write-Host "Assignment added by EligibleHound: $roleName : $principalName"
+    $headers = @{
+        Authorization = "Basic " + [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("${neo4jUser}:${neo4jPassword}"))
+        "Content-Type" = "application/json"
+    }
+
+    try {
+        $response = Invoke-RestMethod -Uri $neo4jUrl -Method Post -Headers $headers -Body $body
+        Write-Host "Beziehung AZRoleEligible erstellt: $principalName -> $roleName"
+    } catch {
+        Write-Warning "Fehler beim Erstellen der Beziehung: $_"
+    }
 }
-
-# Format and save JSON
-Write-Host "Starting to write JSON to $outputPath"
-$updateJson = $updateJson | ConvertTo-Json -Depth 10 -Compress
-$updateJson | Set-Content -Path $outputPath -Encoding UTF8
-Write-Host "Writing JSON completed"
