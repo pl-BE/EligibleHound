@@ -74,6 +74,34 @@ if ($LowMemoryMode -and (-not $TenantId)) {
     exit
 }
 
+# Check Neo4j Connection
+$headers = @{
+    Authorization = "Basic " + [Convert]::ToBase64String(
+        [Text.Encoding]::ASCII.GetBytes("${neo4jUser}:${neo4jPassword}")
+    )
+    "Content-Type" = "application/json"
+}
+$body = '{"statements":[{"statement":"RETURN 1"}]}'
+try {
+    Write-Host "Checking Neo4j connection."
+    $response = Invoke-RestMethod -Uri $neo4jUrl -Method Post -Headers $headers -Body $body
+    Write-Host "Connection successful: Neo4j credentials are valid."
+} catch {
+    $statusCode = $null
+    $statusDesc = $null
+    if ($_.Exception.Response){
+        $statusCode = $_.Exception.Response.StatusCode.Value__
+        $statusDesc = $_.Exception.Response.StatusDescription
+        if ($statusCode -eq 401 -and $statusDesc -eq "Unauthorized"){
+            Write-Warning "Neo4j Unauthorized. Check your username and password."
+        }
+    }
+    else {
+        Write-Warning "Neo4j connection failed. $($_.Exception.Message)"
+    }
+    exit
+}
+
 # Load and filter CSV
 Write-Host "Loading CSV from $CsvPath"
 $csv = Import-Csv -Path $CsvPath -Delimiter ";" | Where-Object { $_."Assignment State" -eq "Eligible" }
