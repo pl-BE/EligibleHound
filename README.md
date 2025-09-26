@@ -11,7 +11,7 @@ Die neuen Rollenzuweisungen werden als Objekte in die JSON-Struktur geschrieben 
 - **CSV-Datei (`export_example.csv`)**  
   Enthält Rollenzuweisungen mit folgenden relevanten Spalten:
   - `Role Name`
-  - `PrincipalName`
+  - `User Group Name` oder `User/Group Name` (Displayname des Benutzers oder der Gruppe)
   - (Weitere Spalten werden ignoriert)
 
 - **Neo4j-Datenbank**  
@@ -34,7 +34,8 @@ Die neuen Rollenzuweisungen werden als Objekte in die JSON-Struktur geschrieben 
    Alle Tenants werden aus Neo4j abgefragt und im Terminal angezeigt. Der erste Tenant wird automatisch für die Rollenzuweisungen verwendet.
 
 4. **IDs für Benutzer und Rollen auflösen**  
-   Für jede Zeile werden die benötigten IDs aus Neo4j abgefragt.
+   Für jede Zeile werden die benötigten IDs aus Neo4j abgefragt.  
+   Der Benutzer/Gruppe wird über den Displayname (`User Group Name` oder `User/Group Name`) identifiziert.
 
 5. **Rollenzuweisungen erzeugen**  
    Für jede gültige Kombination wird ein neues Rollenzuweisungsobjekt erstellt.
@@ -57,6 +58,7 @@ Die neuen Rollenzuweisungen werden als Objekte in die JSON-Struktur geschrieben 
 - Die CSV-Datei muss das Semikolon (`;`) als Trennzeichen verwenden.
 - Die Neo4j-Zugangsdaten werden als Parameter übergeben.
 - Die Tenant-Auswahl erfolgt automatisch anhand des ersten gefundenen Tenants in Neo4j (wird im Terminal angezeigt).
+- Der Benutzer/Gruppe wird über den Displayname (`User Group Name` oder `User/Group Name`) identifiziert, nicht über die UPN.
 
 ## 📌 Beispielausgabe
 
@@ -69,7 +71,7 @@ Querying Neo4j for tenants...
 Available tenants in Neo4j:
 1. Name: ExampleTenant | ID: 12345678-1234-1234-1234-123456789abc
 Using tenant 'ExampleTenant' with ID '12345678-1234-1234-1234-123456789abc' for role assignments. If this is incorrect, please specify the correct TenantId using the -TenantId parameter.
-Assignment added: Contributor : user@example.com
+Assignment added: Contributor : Max Mustermann
 Writing JSON completed
 You can now import the file eligiblehound.json into BloodHound.
 ```

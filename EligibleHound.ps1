@@ -180,10 +180,10 @@ function Get-TenantsFromNeo4j {
 function Get-PrincipalId {
     <#
     .SYNOPSIS
-    Retrieves the object ID of a principal from Neo4j.
+    Retrieves the object ID of a principal from Neo4j using the display name.
 
     .DESCRIPTION
-    Queries Neo4j for the object ID of a principal (user/service principal) based on the provided principal name.
+    Queries Neo4j for the object ID of a principal (user/service principal/group) based on the provided display name.
     Returns the object ID if found, otherwise returns $null and writes a warning.
 
     .PARAMETER Neo4jUrl
@@ -192,21 +192,21 @@ function Get-PrincipalId {
     .PARAMETER Headers
     The HTTP headers for Neo4j requests.
 
-    .PARAMETER PrincipalName
-    The userPrincipalName of the principal to look up.
+    .PARAMETER DisplayName
+    The display name of the principal to look up.
 
     .OUTPUTS
     [string] - Returns the object ID of the principal, or $null if not found.
 
     .EXAMPLE
-    $principalId = Get-PrincipalId -Neo4jUrl $Neo4jUrl -Headers $headers -PrincipalName "user@domain.com"
+    $principalId = Get-PrincipalId -Neo4jUrl $Neo4jUrl -Headers $headers -DisplayName "Max Mustermann"
     #>
     param (
         [string]$Neo4jUrl,
         [hashtable]$Headers,
-        [string]$PrincipalName
+        [string]$DisplayName
     )
-    $principalCypher = "MATCH (u:AZBase {userprincipalname: '$PrincipalName'}) RETURN u.objectid AS principalId"
+    $principalCypher = "MATCH (u:AZBase {displayname: '$DisplayName'}) RETURN u.objectid AS principalId"
     $body = @{
         statements = @(@{ statement = $principalCypher })
     } | ConvertTo-Json -Depth 10
@@ -216,11 +216,11 @@ function Get-PrincipalId {
         if ($response.results[0].data.Count -gt 0) {
             return $response.results[0].data[0].row[0]
         } else {
-            Write-Warning "Principal '$PrincipalName' not found in Neo4j. Skipping assignment."
+            Write-Warning "Principal with display name '$DisplayName' not found in Neo4j. Skipping assignment."
             return $null
         }
     } catch {
-        Write-Warning "Error querying Neo4j for principal '$PrincipalName': $($_.Exception.Message)"
+        Write-Warning "Error querying Neo4j for principal '$DisplayName': $($_.Exception.Message)"
         return $null
     }
 }
@@ -380,10 +380,12 @@ if (-not $TenantId) {
 $dataArray = @()
 
 foreach ($entry in $csv) {
-    $roleName      = $entry.'Role Name'
-    $principalName = $entry.PrincipalName
+    $roleName = $entry.'Role Name'
+    # Try both possible field names for display name
+    $displayName = $entry.'User Group Name'
+    if (-not $displayName) { $displayName = $entry.'User/Group Name' }
 
-    $principalId = Get-PrincipalId -Neo4jUrl $Neo4jUrl -Headers $headers -PrincipalName $principalName
+    $principalId = Get-PrincipalId -Neo4jUrl $Neo4jUrl -Headers $headers -DisplayName $displayName
     if (-not $principalId) { continue }
 
     $roleId = Get-RoleId -Neo4jUrl $Neo4jUrl -Headers $headers -RoleName $roleName
@@ -402,7 +404,7 @@ foreach ($entry in $csv) {
 
     $dataArray += $azRoleAssignment
 
-    Write-Host "Assignment added: $roleName : $principalName"
+    Write-Host "Assignment added: $roleName : $displayName"
 }
 
 Write-JsonOutput -DataArray $dataArray -OutPath $OutPath
