@@ -212,7 +212,7 @@ function Get-PrincipalId {
     } | ConvertTo-Json -Depth 10
 
     try {
-        $response = Invoke-RestMethod -Uri $Neo4jUrl -Method Post -Headers $Headers -Body $body
+        $response = Invoke-RestMethod -Uri $Neo4jUrl -Method Post -Headers $Headers -Body $body -ContentType "application/json; charset=utf-8"
         if ($response.results[0].data.Count -gt 0) {
             return $response.results[0].data[0].row[0]
         } else {
