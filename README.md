@@ -1,66 +1,67 @@
 # EligibleHound PowerShell Script
 
-## 📝 Beschreibung
+## 📝 Description
 
-Dieses PowerShell-Skript liest eine CSV-Datei mit Rollenzuweisungen und generiert eine JSON-Datei im BloodHound-kompatiblen Format.  
-Es verbindet sich mit einer Neo4j-Datenbank, um die benötigten IDs und Namen für Rollen, Benutzer und Tenant zu ermitteln.  
-Die neuen Rollenzuweisungen werden als Objekte in die JSON-Struktur geschrieben und können anschließend in BloodHound importiert werden.
+This PowerShell script reads a CSV file containing role assignments and generates a JSON file in the BloodHound-compatible format.  
+It connects to a Neo4j database to retrieve the required IDs and names for roles, users, and tenants.  
+The new role assignments are written as objects into the JSON structure and can then be imported into BloodHound.
 
-## 📂 Eingabedateien
+## 📂 Input Files
 
-- **CSV-Datei (`export_example.csv`)**  
-  Enthält Rollenzuweisungen mit folgenden relevanten Spalten:
+- **CSV file (`export_example.csv`)**  
+  Contains role assignments with the following relevant columns:
   - `Role Name`
-  - `User Group Name` oder `User/Group Name` (Displayname des Benutzers oder der Gruppe)
-  - (Weitere Spalten werden ignoriert)
+  - `User Group Name` or `User/Group Name` (display name of the user or group)
+  - (Other columns are ignored)
+  This file can for example be a export from Entra or Azure.
 
-- **Neo4j-Datenbank**  
-  Die IDs und Namen für Rollen, Benutzer und Tenant werden direkt aus Neo4j abgefragt.
+- **Neo4j Database**  
+  The IDs and names for roles, users, and tenants are queried directly from Neo4j.
 
-## 📤 Ausgabedatei
+## 📤 Output File
 
 - **`eligiblehound.json`**  
-  Eine neue JSON-Datei mit den generierten Rollenzuweisungen im BloodHound-Format.
+  A new JSON file with the generated role assignments in BloodHound format.
 
-## ⚙️ Funktionsweise
+## ⚙️ How It Works
 
-1. **CSV einlesen**  
-   Die CSV wird eingelesen und Zeile für Zeile verarbeitet.
+1. **Read CSV**  
+   The CSV is read and processed row by row.
 
-2. **Verbindung zu Neo4j herstellen**  
-   Die Zugangsdaten werden verwendet, um die Verbindung zu Neo4j zu testen.
+2. **Connect to Neo4j**  
+   The provided credentials are used to test the connection to Neo4j.
 
-3. **Tenant ermitteln**  
-   Alle Tenants werden aus Neo4j abgefragt und im Terminal angezeigt. Der erste Tenant wird automatisch für die Rollenzuweisungen verwendet.
+3. **Determine Tenant**  
+   All tenants are queried from Neo4j and displayed in the terminal. The first tenant found is automatically used for the role assignments.
 
-4. **IDs für Benutzer und Rollen auflösen**  
-   Für jede Zeile werden die benötigten IDs aus Neo4j abgefragt.  
-   Der Benutzer/Gruppe wird über den Displayname (`User Group Name` oder `User/Group Name`) identifiziert.
+4. **Resolve IDs for Users and Roles**  
+   For each row, the required IDs are queried from Neo4j.  
+   The user/group is identified by the display name (`User Group Name` or `User/Group Name`).
 
-5. **Rollenzuweisungen erzeugen**  
-   Für jede gültige Kombination wird ein neues Rollenzuweisungsobjekt erstellt.
+5. **Create Role Assignments**  
+   For each valid combination, a new role assignment object is created.
 
-6. **JSON schreiben**  
-   Die generierten Objekte werden in die Ausgabedatei geschrieben.
+6. **Write JSON**  
+   The generated objects are written to the output file.
 
-## ▶️ Nutzung
+## ▶️ Usage
 
 ```powershell
-# Beispielaufruf mit Standardwerten
+# Example call with default values
 .\EligibleHound.ps1
 
-# Mit eigenen Parametern
+# With custom parameters
 .\EligibleHound.ps1 -CsvPath .\export_example.csv -OutPath .\eligiblehound.json -Neo4jUrl "http://localhost:7474/db/neo4j/tx/commit" -Neo4jUser "neo4j" -Neo4jPassword "bloodhoundcommunityedition"
 ```
 
-## ⚠️ Hinweise
+## ⚠️ Notes
 
-- Die CSV-Datei muss das Semikolon (`;`) als Trennzeichen verwenden.
-- Die Neo4j-Zugangsdaten werden als Parameter übergeben.
-- Die Tenant-Auswahl erfolgt automatisch anhand des ersten gefundenen Tenants in Neo4j (wird im Terminal angezeigt).
-- Der Benutzer/Gruppe wird über den Displayname (`User Group Name` oder `User/Group Name`) identifiziert, nicht über die UPN.
+- The CSV file must use a semicolon (`;`) as the delimiter.
+- The Neo4j credentials are passed as parameters.
+- Tenant selection is automatic based on the first tenant found in Neo4j (displayed in the terminal).
+- The user/group is identified by the display name (`User Group Name` or `User/Group Name`), not by UPN.
 
-## 📌 Beispielausgabe
+## 📌 Example Output
 
 ```
 Starting to read CSV export_example.csv
