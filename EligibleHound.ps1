@@ -368,7 +368,13 @@ function Write-JsonOutput {
 # Main script logic
 
 Write-Host "Starting to read CSV $CsvPath"
-$csv = Import-Csv -Path $CsvPath -Delimiter ";"
+# Try to auto-detect delimiter: if file contains ';' in header, use semicolon, else use comma
+$firstLine = Get-Content -Path $CsvPath -TotalCount 1
+if ($firstLine -like "*;*") {
+    $csv = Import-Csv -Path $CsvPath -Delimiter ";"
+} else {
+    $csv = Import-Csv -Path $CsvPath -Delimiter ","
+}
 Write-Host "Reading CSV completed"
 
 $headers = Test-Neo4jConnection -Neo4jUrl $Neo4jUrl -Neo4jUser $Neo4jUser -Neo4jPassword $Neo4jPassword
@@ -380,10 +386,14 @@ if (-not $TenantId) {
 $dataArray = @()
 
 foreach ($entry in $csv) {
+    # Try both possible field names for role name
     $roleName = $entry.'Role Name'
-    # Try both possible field names for display name
+    if (-not $roleName) { $roleName = $entry.'roleDisplayName' }
+
+    # Try all possible field names for display name
     $displayName = $entry.'User Group Name'
     if (-not $displayName) { $displayName = $entry.'User/Group Name' }
+    if (-not $displayName) { $displayName = $entry.'displayName' }
 
     $principalId = Get-PrincipalId -Neo4jUrl $Neo4jUrl -Headers $headers -DisplayName $displayName
     if (-not $principalId) { continue }

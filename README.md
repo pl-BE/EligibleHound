@@ -59,7 +59,8 @@ The new role assignments are written as objects into the JSON structure and can 
 - The CSV file must use a semicolon (`;`) as the delimiter.
 - The Neo4j credentials are passed as parameters.
 - Tenant selection is automatic based on the first tenant found in Neo4j (displayed in the terminal).
-- The user/group is identified by the display name (`User Group Name` or `User/Group Name`), not by UPN.
+- The user/group is identified by the display name (`User Group Name`, `User/Group Name` or `displayName`), not by UPN.
+- The role is identified by the role dislay name (`Role Name` or `roleDisplayName`)
 
 ## 📌 Example Output
 
