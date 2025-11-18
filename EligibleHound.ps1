@@ -177,14 +177,59 @@ function Get-TenantsFromNeo4j {
     }
 }
 
-function Get-PrincipalId {
+function Get-PrincipalIdByUPN {
     <#
     .SYNOPSIS
-    Retrieves the object ID of a principal from Neo4j using the display name.
+    Retrieves the object ID of a user from Neo4j using the UPN.
 
     .DESCRIPTION
-    Queries Neo4j for the object ID of a principal (user/service principal/group) based on the provided display name.
-    Returns the object ID if found, otherwise returns $null and writes a warning.
+    Looks up a user node in Neo4j by its userPrincipalName (UPN) and returns the object ID.
+    If the user is not found, returns $null and writes a warning.
+
+    .PARAMETER Neo4jUrl
+    The URL of the Neo4j transactional Cypher endpoint.
+
+    .PARAMETER Headers
+    The HTTP headers for Neo4j requests.
+
+    .PARAMETER UPN
+    The userPrincipalName (UPN) of the user to look up.
+
+    .OUTPUTS
+    [string] - Returns the object ID of the user, or $null if not found.
+
+    .EXAMPLE
+    $principalId = Get-PrincipalIdByUPN -Neo4jUrl $Neo4jUrl -Headers $headers -UPN "user@domain.com"
+    #>
+    param (
+        [string]$Neo4jUrl,
+        [hashtable]$Headers,
+        [string]$UPN
+    )
+    $cypher = "MATCH (u:AZBase {userprincipalname: '$UPN'}) RETURN u.objectid AS principalId"
+    $body = @{ statements = @(@{ statement = $cypher }) } | ConvertTo-Json -Depth 10
+    try {
+        $response = Invoke-RestMethod -Uri $Neo4jUrl -Method Post -Headers $Headers -Body $body
+        if ($response.results[0].data.Count -gt 0) {
+            return $response.results[0].data[0].row[0]
+        } else {
+            Write-Warning "User with UPN '$UPN' not found in Neo4j. Skipping assignment."
+            return $null
+        }
+    } catch {
+        Write-Warning "Error querying Neo4j for user '$UPN': $($_.Exception.Message)"
+        return $null
+    }
+}
+
+function Get-PrincipalIdByServicePrincipal {
+    <#
+    .SYNOPSIS
+    Retrieves the object ID of a ServicePrincipal from Neo4j using the display name.
+
+    .DESCRIPTION
+    Looks up a ServicePrincipal node in Neo4j by its display name (using CONTAINS) and returns the object ID.
+    If the ServicePrincipal is not found, returns $null and writes a warning.
 
     .PARAMETER Neo4jUrl
     The URL of the Neo4j transactional Cypher endpoint.
@@ -193,34 +238,77 @@ function Get-PrincipalId {
     The HTTP headers for Neo4j requests.
 
     .PARAMETER DisplayName
-    The display name of the principal to look up.
+    The display name of the ServicePrincipal to look up.
 
     .OUTPUTS
-    [string] - Returns the object ID of the principal, or $null if not found.
+    [string] - Returns the object ID of the ServicePrincipal, or $null if not found.
 
     .EXAMPLE
-    $principalId = Get-PrincipalId -Neo4jUrl $Neo4jUrl -Headers $headers -DisplayName "Max Mustermann"
+    $principalId = Get-PrincipalIdByServicePrincipal -Neo4jUrl $Neo4jUrl -Headers $headers -DisplayName "MyApp"
     #>
     param (
         [string]$Neo4jUrl,
         [hashtable]$Headers,
         [string]$DisplayName
     )
-    $principalCypher = "MATCH (u:AZBase {displayname: '$DisplayName'}) RETURN u.objectid AS principalId"
-    $body = @{
-        statements = @(@{ statement = $principalCypher })
-    } | ConvertTo-Json -Depth 10
-
+    # Lookup ServicePrincipal by display name (contains)
+    $cypher = "MATCH (sp:AZServicePrincipal) WHERE sp.displayname CONTAINS '$DisplayName' RETURN sp.objectid AS principalId"
+    $body = @{ statements = @(@{ statement = $cypher }) } | ConvertTo-Json -Depth 10
     try {
-        $response = Invoke-RestMethod -Uri $Neo4jUrl -Method Post -Headers $Headers -Body $body -ContentType "application/json; charset=utf-8"
+        $response = Invoke-RestMethod -Uri $Neo4jUrl -Method Post -Headers $Headers -Body $body
         if ($response.results[0].data.Count -gt 0) {
             return $response.results[0].data[0].row[0]
         } else {
-            Write-Warning "Principal with display name '$DisplayName' not found in Neo4j. Skipping assignment."
+            Write-Warning "ServicePrincipal with display name containing '$DisplayName' not found in Neo4j. Skipping assignment."
             return $null
         }
     } catch {
-        Write-Warning "Error querying Neo4j for principal '$DisplayName': $($_.Exception.Message)"
+        Write-Warning "Error querying Neo4j for ServicePrincipal '$DisplayName': $($_.Exception.Message)"
+        return $null
+    }
+}
+
+function Get-PrincipalIdByGroup {
+    <#
+    .SYNOPSIS
+    Retrieves the object ID of a group from Neo4j using the display name.
+
+    .DESCRIPTION
+    Looks up a group node in Neo4j by its display name (using CONTAINS) and returns the object ID.
+    If the group is not found, returns $null and writes a warning.
+
+    .PARAMETER Neo4jUrl
+    The URL of the Neo4j transactional Cypher endpoint.
+
+    .PARAMETER Headers
+    The HTTP headers for Neo4j requests.
+
+    .PARAMETER DisplayName
+    The display name of the group to look up.
+
+    .OUTPUTS
+    [string] - Returns the object ID of the group, or $null if not found.
+
+    .EXAMPLE
+    $principalId = Get-PrincipalIdByGroup -Neo4jUrl $Neo4jUrl -Headers $headers -DisplayName "Domain Users"
+    #>
+    param (
+        [string]$Neo4jUrl,
+        [hashtable]$Headers,
+        [string]$DisplayName
+    )
+    $cypher = "MATCH (g:AZGroup) WHERE g.displayname CONTAINS '$DisplayName' RETURN g.objectid AS principalId"
+    $body = @{ statements = @(@{ statement = $cypher }) } | ConvertTo-Json -Depth 10
+    try {
+        $response = Invoke-RestMethod -Uri $Neo4jUrl -Method Post -Headers $Headers -Body $body
+        if ($response.results[0].data.Count -gt 0) {
+            return $response.results[0].data[0].row[0]
+        } else {
+            Write-Warning "Group with display name containing '$DisplayName' not found in Neo4j. Skipping assignment."
+            return $null
+        }
+    } catch {
+        Write-Warning "Error querying Neo4j for group '$DisplayName': $($_.Exception.Message)"
         return $null
     }
 }
@@ -395,7 +483,23 @@ foreach ($entry in $csv) {
     if (-not $displayName) { $displayName = $entry.'User/Group Name' }
     if (-not $displayName) { $displayName = $entry.'displayName' }
 
-    $principalId = Get-PrincipalId -Neo4jUrl $Neo4jUrl -Headers $headers -DisplayName $displayName
+    # Try all possible field names for principal name (UPN or GUID)
+    $principalName = $entry.'PrincipalName'
+
+    # Determine principal type and lookup logic
+    if ($principalName -and ($principalName -match "@")) {
+        # User: lookup by UPN
+        $principalId = Get-PrincipalIdByUPN -Neo4jUrl $Neo4jUrl -Headers $headers -UPN $principalName
+    }
+    elseif ($principalName -and ($principalName -notmatch "@")) {
+        # Service Principal: lookup by display name (contains)
+        $principalId = Get-PrincipalIdByServicePrincipal -Neo4jUrl $Neo4jUrl -Headers $headers -DisplayName $displayName
+    }
+    else {
+        # Group: lookup by display name (contains)
+        $principalId = Get-PrincipalIdByGroup -Neo4jUrl $Neo4jUrl -Headers $headers -DisplayName $displayName
+    }
+
     if (-not $principalId) { continue }
 
     $roleId = Get-RoleId -Neo4jUrl $Neo4jUrl -Headers $headers -RoleName $roleName

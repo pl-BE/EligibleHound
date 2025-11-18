@@ -10,8 +10,9 @@ The new role assignments are written as objects into the JSON structure and can 
 
 - **CSV file (`export_example.csv`)**  
   Contains role assignments with the following relevant columns:
-  - `Role Name`
+  - `Role Name` or `roleDisplayName`
   - `User Group Name` or `User/Group Name` (display name of the user or group)
+  - `User Group Name`, `User/Group Name` or `displayName`
   - (Other columns are ignored)
   This file can for example be a export from Entra or Azure.
 
@@ -56,11 +57,15 @@ The new role assignments are written as objects into the JSON structure and can 
 
 ## ⚠️ Notes
 
-- The CSV file must use a semicolon (`;`) as the delimiter.
 - The Neo4j credentials are passed as parameters.
 - Tenant selection is automatic based on the first tenant found in Neo4j (displayed in the terminal).
-- The user/group is identified by the display name (`User Group Name`, `User/Group Name` or `displayName`), not by UPN.
-- The role is identified by the role dislay name (`Role Name` or `roleDisplayName`)
+- The principal (user, group, or service principal) is identified as follows:
+  - If the `PrincipalName` field contains an `@`, it is treated as a user and resolved by UPN.
+  - If the `PrincipalName` field is set but does not contain an `@`, it is treated as a service principal and resolved by display name (contains).
+  - If the `PrincipalName` field is not set, it is treated as a group and resolved by display name (contains).
+  - For display name lookups, the script checks the columns `User Group Name`, `User/Group Name`, or `displayName`.
+- The role is identified by the role display name (`Role Name` or `roleDisplayName`).
+- The CSV delimiter can be either a semicolon (`;`) or a comma (`,`); the script auto-detects the delimiter.
 
 ## 📌 Example Output
 
